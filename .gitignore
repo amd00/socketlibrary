@@ -1,0 +1,10 @@
+Makefile
+CMakeCache.txt
+CMakeFiles
+cmake_install.cmake
+install_manifest.txt
+libsocketlibrary.so
+libsocketlibrary.so.1.0
+libsocketlibrary.so.1.0.0
+libsocketlibraryS.a
+

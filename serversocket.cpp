@@ -6,144 +6,44 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <algorithm>
+
 #include "serversocket.h"
 
-////////////////////////////////////////////////////////////////////////////////////
-
-ServerSocket::SocketList::SocketList() : first(NULL), size(0)
+class SocketEraser
 {
-}
-
-////////////////////////////////////////////////////////////////////////////////////
-
-ServerSocket::SocketList::~SocketList()
-{
-	SocketListItem *tmp_item = first;
-	while(tmp_item)
+public:
+	void operator() (std::pair<const int, Socket*> &_val)
 	{
-		delete tmp_item -> sock;
-		tmp_item = tmp_item -> next;
-		delete tmp_item;
-	}
-}
+		delete _val.second;
+	};
+} sock_eraser;
 
-////////////////////////////////////////////////////////////////////////////////////
-
-size_t ServerSocket::SocketList::Size() const
+class SocketComparer
 {
-	return size;
-}
-
-////////////////////////////////////////////////////////////////////////////////////
-
-bool ServerSocket::SocketList::AddItem(Socket *s)
-{
-	if(!s)
+public:
+	bool operator()(Socket *_sock, int _fd)
 	{
-		fprintf(stderr, "SocketList::AddItem: В качестве аргумента передан NULL\n");
-		return false;
-	}
-	SocketListItem *new_item = new SocketListItem;
-	new_item -> sock = s;
-	new_item -> next = NULL;
-	if(!first)
-	{
-		first = new_item;
-		size++;
-		return true;
-	}
-	SocketListItem *tmp_item = first;
-	while(tmp_item -> next)
-		tmp_item = tmp_item -> next;
-	tmp_item -> next = new_item;
-	size++;
-	return true;
-}
+		return (_sock -> Fd() == _fd);
+	};
+} sock_comparer;
 
-////////////////////////////////////////////////////////////////////////////////////
+pthread_mutex_t ServerSocket::mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
-bool ServerSocket::SocketList::RemoveItem(Socket *s)
+ServerSocket *ServerSocket::findServer(int _fd)
 {
-	if(!s || !size)
-		return false;
-	SocketListItem *tmp_item = first;
-	SocketListItem *tmp_tmp_item = NULL;
-	while(tmp_item)
+	for(ServerSocketMap::iterator it = servers.begin(); it != servers.end(); it++)
 	{
-		if(tmp_item -> sock == s)
-			break;
-		tmp_tmp_item = tmp_item;
-		tmp_item = tmp_item -> next;
+		if(it -> second -> sockets.count(_fd))
+			return it -> second;
 	}
-	if(!tmp_item)
-		return false;
-	if(!tmp_tmp_item)
-		first = tmp_item -> next;
-	else
-		tmp_tmp_item -> next = tmp_item -> next;
-	delete tmp_item;
-	size--;
-	if(!size)
-		first = NULL;
-	s = NULL;
-	return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////////
-
-bool ServerSocket::SocketList::Exists(Socket *s)
-{
-	if(!s)
-		return false;
-	SocketListItem *tmp_item = first;
-	while(tmp_item)
-	{
-		if(tmp_item -> sock == s)
-			return true;
-		tmp_item = tmp_item -> next;
-	}
-	return false;
-}
-
-////////////////////////////////////////////////////////////////////////////////////
-
-Socket *ServerSocket::SocketList::operator[](int i) const
-{
-	if(i < 0 || i >= (int)size)
-		return NULL;
-	SocketListItem *tmp_item = first;
-	
-	for(int j = 0; j < i; j++, tmp_item = tmp_item -> next)
-	{
-	}
-	return tmp_item -> sock;
-}
-
-Socket *ServerSocket::SocketList::GetSocketByFd(int fd) const
-{
-	if(fd <= 0)
-		return NULL;
-	for(int i = 0; i < (int)size; i++)
-		if(operator[](i) -> Fd() == fd)
-			return operator[](i);
 	return NULL;
 }
 
-////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////
-
- pthread_mutex_t ServerSocket::mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
-
-////////////////////////////////////////////////////////////////////////////////////
-
-ServerSocket::ServerSocketList *ServerSocket::servers = new ServerSocket::ServerSocketList();
-
-ServerSocket::ServerSocket()
+ServerSocket::ServerSocket() : sockets()
 {
 // Конструктор
-	sockets = new ServerSocket::SocketList();
-	servers -> AddItem(this);
+// 	servers.push_back(this);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -151,8 +51,9 @@ ServerSocket::ServerSocket()
 ServerSocket::~ServerSocket()
 {
 // Деструктор
-	servers -> RemoveItem(this);
-	delete sockets;
+// 	servers.RemoveItem(this);
+	servers.erase(listener);
+	std::for_each(sockets.begin(), sockets.end(), sock_eraser);
 	close(listener);
 }
 
@@ -187,23 +88,26 @@ void ServerSocket::Start()
 		perror("ServerSocket::Start listen");
 		return;
 	}
-	sockets -> AddItem(GetNewSocket(listener));
+	Socket *new_sock = GetNewSocket(listener);
+	servers[listener] = this;
+	sockets[new_sock -> Fd()] = new_sock;
 // Основной цикл
 	while(true)
 	{
 		memset(polls, 0, sizeof(polls));
 // Инициализация массива структур "pollfd"
- 		for(unsigned i = 0; i < sockets -> Size(); i++)
+		int i = 0;
+ 		for(SocketMap::iterator it = sockets.begin(); it != sockets.end(); it++, i++)
 		{
 			pollfd pol;
-			pol.fd = sockets -> operator[](i) -> Fd();
+			pol.fd = (it -> second) -> Fd();
 			pol.events = POLLIN;
 			polls[i] = pol;
 		}
 // Ожидание события на файловом дескрипторе
 
 		int res;
-		res = TEMP_FAILURE_RETRY(poll(polls, sockets -> Size(), -1));
+		res = TEMP_FAILURE_RETRY(poll(polls, sockets.size(), -1));
 		if(res == -1)
 		{
 			perror("ServerSocket::Start poll");
@@ -229,7 +133,7 @@ void ServerSocket::Start()
 				close(sock);
 				continue;
 			}
-			sockets -> AddItem(s);
+			sockets[s -> Fd()] = s;
 		// Метод, определённый пользователем
 			Accept(s);
 			continue;
@@ -237,10 +141,10 @@ void ServerSocket::Start()
 // Обработка события на сокете
 		int processed_events = 0;
 	// Поиск сокета, на котором произощло событие
-		for(int i = 0; i < (int)sockets -> Size() && processed_events < res; i++)
+		for(int i = 0; i < (int)sockets.size() && processed_events < res; i++)
 			if(polls[i].revents != 0)
 			{
-				Socket *tmp_socket = sockets -> GetSocketByFd(polls[i].fd);
+				Socket *tmp_socket = sockets[polls[i].fd];
 				Receiver(tmp_socket);
 				processed_events++;
 			}
@@ -291,8 +195,8 @@ void ServerSocket::ThreadStart()
 void *ServerSocket::ThreadAccept(void *data)
 {
 	int l = *(int*)data;
-	ServerSocket *self = servers -> GetServerByFd(l);
-	self -> sockets -> AddItem(self -> GetNewSocket(l));
+	ServerSocket *self = servers[l];
+	self -> sockets[l] = self -> GetNewSocket(l);
 	pollfd listener_polls[1];
 	listener_polls[0].fd = l;
 	listener_polls[0].events = POLLIN;
@@ -325,7 +229,7 @@ void *ServerSocket::ThreadAccept(void *data)
 			pthread_mutex_unlock(&mutex);
 			continue;
 		}
-		self -> sockets -> AddItem(s);
+		self -> sockets[sock] = s;
 	// Метод, определённый пользователем
 		self -> Accept(s);
 		pthread_mutex_unlock(&mutex);
@@ -347,7 +251,8 @@ void *ServerSocket::ThreadReceiver(void *data)
 {
 	Socket *sock = (Socket*)data;
 	pthread_mutex_lock(&mutex);
-	ServerSocket *self = servers -> GetServerBySocketFd(sock -> Fd());
+// #error 
+	ServerSocket *self = findServer(sock -> Fd());
  	pthread_mutex_unlock(&mutex);
 	if(!self)
 		pthread_exit(NULL);
@@ -364,7 +269,7 @@ void ServerSocket::DisconnectClient(Socket *socket)
 {
 // Отключение клиента
 	pthread_mutex_lock(&mutex);
-	if(sockets -> RemoveItem(socket))
+	if(sockets.erase(socket -> Fd()))
 	{
 		delete socket;
 		socket = NULL;
@@ -433,8 +338,8 @@ void ServerSocket::AsyncStart()
 		perror("ServerSocket::AsyncStart listen");
 		return;
 	}
-		
-	sockets -> AddItem(GetNewSocket(listener));
+	
+	sockets[listener] =GetNewSocket(listener);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -442,7 +347,7 @@ void ServerSocket::AsyncStart()
 void ServerSocket::AsyncAccept(int sig, siginfo_t *sig_info, void*)
 {
 // Обработка события на серверном сокете
-	ServerSocket *self = servers -> GetServerByFd(sig_info -> si_fd);
+	ServerSocket *self = servers[sig_info -> si_fd];
 	if(!self)
 		return;
 	if(sig_info -> si_code == POLL_ERR)
@@ -474,7 +379,7 @@ void ServerSocket::AsyncAccept(int sig, siginfo_t *sig_info, void*)
 		close(sock);
 		return;
 	}
-	self -> sockets -> AddItem(s);
+	self -> sockets[sock] = s;
 // Метод, определённоый пользователем
 	self -> Accept(s);
 }
@@ -483,7 +388,7 @@ void ServerSocket::AsyncAccept(int sig, siginfo_t *sig_info, void*)
 
 void ServerSocket::AsyncReceiver(int sig, siginfo_t *sig_info, void*)
 {
-	ServerSocket *self = servers -> GetServerBySocketFd(sig_info -> si_fd);
+	ServerSocket *self = findServer(sig_info -> si_fd);
 	if(!self)
 		return;
 	if(sig_info -> si_code == POLL_ERR)
@@ -491,117 +396,9 @@ void ServerSocket::AsyncReceiver(int sig, siginfo_t *sig_info, void*)
 		fprintf(stderr, "%s\n", "SIGPOLL вернул POLL_ERR");
 		return;
 	}
-	Socket *tmp_socket = self -> sockets -> GetSocketByFd(sig_info -> si_fd);
+	Socket *tmp_socket = self -> sockets[sig_info -> si_fd];
 	if(!tmp_socket)
 		return;
 	self -> Receiver(tmp_socket);
 	return;
-}
-
-////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////
-
-ServerSocket::ServerSocketList::ServerSocketList() : first(NULL), size(0)
-{
-}
-
-ServerSocket::ServerSocketList::~ServerSocketList()
-{
-}
-
-bool ServerSocket::ServerSocketList::AddItem(ServerSocket *s)
-{
-	if(!s)
-	{
-		fprintf(stderr, "SocketList::AddItem: В качестве аргумента передан NULL\n");
-		return false;
-	}
-	if(!first)
-	{
-		first = new ServerSocketListItem;
-		first -> sock = s;
-		first -> next = NULL;
-		size++;
-		return true;
-	}
-	ServerSocketListItem *tmp_item = first;
-	while(tmp_item -> next)
-		tmp_item = tmp_item -> next;
-	ServerSocketListItem *new_item;
-	new_item = new ServerSocketListItem;
-	new_item -> sock = s;
-	new_item -> next = NULL;
-	tmp_item -> next = new_item;
-	size++;
-	return true;
-}
-
-void ServerSocket::ServerSocketList::RemoveItem(ServerSocket *s)
-{
-	if(!s || !size)
-		return;
-	ServerSocketListItem *tmp_item = first;
-	ServerSocketListItem *tmp_tmp_item = NULL;
-	while(tmp_item)
-	{
-		if(tmp_item -> sock == s)
-			break;
-		tmp_tmp_item = tmp_item;
-		tmp_item = tmp_item -> next;
-	}
-	if(!tmp_item)
-		return;
-	if(!tmp_tmp_item)
-		first = tmp_item -> next;
-	else
-		tmp_tmp_item -> next = tmp_item -> next;
-	delete tmp_item;
-	size--;
-	if(!size)
-		first = NULL;
-}
-
-size_t ServerSocket::ServerSocketList::Size() const
-{
-	return size;
-}
-
-ServerSocket *ServerSocket::ServerSocketList::operator[](int i) const
-{
-	if(i < 0 || i >= (int)size)
-		return NULL;
-	ServerSocketListItem *tmp_item = first;
-	
-	for(int j = 0; j < i; j++, tmp_item = tmp_item -> next)
-	{
-	}
-	return tmp_item -> sock;
-}
-
-ServerSocket *ServerSocket::ServerSocketList::GetServerByFd(int fd) const
-{
-	if(fd <= 0)
-		return NULL;
-	
-	for(int i = 0; i < (int)size; i++)
-	{
-		if(this -> operator[](i) -> listener == fd)
-			return this -> operator[](i);
-	}
-	return NULL;
-}
-
-ServerSocket *ServerSocket::ServerSocketList::GetServerBySocketFd(int fd) const
-{
-	if(fd <= 0)
-		return NULL;
-	
-	for(int i = 0; i < (int)size; i++)
-	{
-		for(int j = 0; j < (int)this -> operator[](i) -> sockets -> Size(); j++)
-			if(this -> operator[](i) -> sockets -> operator[](j) -> Fd() == fd)
-				return this -> operator[](i);
-	}
-	return NULL;
 }

@@ -19,15 +19,6 @@ public:
 	};
 } sock_eraser;
 
-class SocketComparer
-{
-public:
-	bool operator()(Socket *_sock, int _fd)
-	{
-		return (_sock -> Fd() == _fd);
-	};
-} sock_comparer;
-
 pthread_mutex_t ServerSocket::mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
 ServerSocket *ServerSocket::findServer(int _fd)

@@ -21,6 +21,8 @@ public:
 
 pthread_mutex_t ServerSocket::mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
+ServerSocketMap ServerSocket::servers;
+
 ServerSocket *ServerSocket::findServer(int _fd)
 {
 	for(ServerSocketMap::iterator it = servers.begin(); it != servers.end(); it++)
@@ -173,6 +175,7 @@ void ServerSocket::ThreadStart()
 		perror("ServerSocket::Start listen");
 		return;
 	}
+	servers[listener] = this;
 // Создание потока, слушающего порт
 	pthread_t p_th;
 	pthread_attr_t attr;
@@ -281,7 +284,7 @@ void ServerSocket::AsyncStart()
 	srv_type = Async;
 // Запуск асинхронной обработки событий
 // Инициализация асинхронного серверного сокета
-	if(fcntl(listener, F_SETFL, O_ASYNC) == -1 || 
+	if(fcntl(listener, F_SETFL, O_NONBLOCK | FASYNC) == -1 || 
 		fcntl(listener, F_SETOWN, getpid()) == -1 || 
 		fcntl(listener, F_SETSIG, SIGRTMIN + 5) == -1)
 	{
@@ -329,8 +332,8 @@ void ServerSocket::AsyncStart()
 		perror("ServerSocket::AsyncStart listen");
 		return;
 	}
-	
-	sockets[listener] =GetNewSocket(listener);
+	servers[listener] = this;
+	sockets[listener] = GetNewSocket(listener);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -356,7 +359,7 @@ void ServerSocket::AsyncAccept(int sig, siginfo_t *sig_info, void*)
 		perror("ServerSocket::AsyncReceiver accept");
 		return;
 	}
-	if(fcntl(sock, F_SETFL, FASYNC) == -1 ||
+	if(fcntl(sock, F_SETFL, O_NONBLOCK | FASYNC) == -1 ||
 		  fcntl(sock, F_SETOWN, getpid()) == -1 ||
 		  fcntl(sock, F_SETSIG, SIGRTMIN + 6) == -1)
 	{

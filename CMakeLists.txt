@@ -14,8 +14,8 @@ add_library(socketlibraryS STATIC ${SOURCE_LIB})	# Создание статич
 add_library(socketlibrary SHARED ${SOURCE_LIB})	# Создание динамической библиотеки с именем foo
 
 set_target_properties(socketlibrary  PROPERTIES
-	  VERSION 1.0.0
-	  SOVERSION 1.0
+	  VERSION 1.1.0
+	  SOVERSION 1.1
 	)
 	
 INSTALL(TARGETS socketlibraryS socketlibrary

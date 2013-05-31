@@ -82,6 +82,8 @@ void Socket::Disconnect()
 {
 // Закрытие сокета
 	connected = false;
+	if(sock == -1)
+		return;
 	if(close(sock) == -1)
 		perror("Socket::Disconnect close");
 	sock = -1;
@@ -114,8 +116,7 @@ int Socket::SyncSend(const void* data, size_t size, int timeout)
  			Disconnect();
 			return 0;
 		}
-		int tmp_bytes;
-		tmp_bytes = TEMP_FAILURE_RETRY(send(sock, &char_data[sent_bytes], bytes_for_send, MSG_NOSIGNAL));
+		int tmp_bytes = TEMP_FAILURE_RETRY(send(sock, &char_data[sent_bytes], bytes_for_send, MSG_NOSIGNAL));
 		if(tmp_bytes == -1)
 		{
 			perror("Socket::SyncSend send");

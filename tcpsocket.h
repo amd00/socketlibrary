@@ -19,8 +19,8 @@ public:
 	~TcpSocket() {}
 
 	bool connect() { return Socket::connect(PF_INET, SOCK_STREAM, (sockaddr*)&m_addr, sizeof(m_addr)); }
-	const char *address() const { return inet_ntoa(m_addr.sin_addr); }
-	int port() const { return ntohs(m_addr.sin_port); }
+	const char *address() const { return ::inet_ntoa(m_addr.sin_addr); }
+	int port() const { return ::ntohs(m_addr.sin_port); }
 	
 private:
 	TcpSocket(int _fd);

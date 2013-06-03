@@ -22,12 +22,12 @@ Socket::Socket(int _fd) : m_last_error(0), m_connected(true)
 {
 	m_fds.fd = _fd;
 // Определение типа сокета (синхронный или асинхронный)
-	int sock_flags = fcntl(fd(), F_GETFL);
+	int sock_flags = ::fcntl(fd(), F_GETFL);
 	if(sock_flags == -1)
 		perror("Socket::Socket fcntl");
 	if(!(sock_flags & O_ASYNC))
 	{
-		if(fcntl(fd(), F_SETFL, O_NONBLOCK) == -1)
+		if(::fcntl(fd(), F_SETFL, O_NONBLOCK) == -1)
 			perror("Socket::Socket fcntl");
 	}
 }
@@ -45,7 +45,7 @@ bool Socket::connect(int _domain, int _type, sockaddr *_addr, socklen_t _sock_le
 {
 	if(m_connected)
 		return false;
-	m_fds.fd = socket(_domain, _type, 0);
+	m_fds.fd = ::socket(_domain, _type, 0);
 	if(fd() == -1)
 	{
 		perror("Socket::Connect socket");
@@ -65,7 +65,7 @@ bool Socket::connect(int _domain, int _type, sockaddr *_addr, socklen_t _sock_le
 		return false;
 	}
 // Создание неблокируемого сокета
-	if(fcntl(fd(), F_SETFL, O_NONBLOCK) == -1)
+	if(::fcntl(fd(), F_SETFL, O_NONBLOCK) == -1)
 	{
 		perror("Socket::Connect fcntl");
  		disconnect();
@@ -83,7 +83,7 @@ void Socket::disconnect()
 	m_connected = false;
 	if(fd() == -1)
 		return;
-	if(close(fd()) == -1)
+	if(::close(fd()) == -1)
 		perror("Socket::Disconnect close");
 	m_fds.fd = -1;
 }
@@ -102,7 +102,7 @@ int Socket::syncSend(const void *_data, size_t _size, int _timeout)
 	while(sent_bytes < (int)_size)
 	{
 		int bytes_for_send = _size - sent_bytes;
-		poll_res = TEMP_FAILURE_RETRY(poll(&m_fds, 1, _timeout));
+		poll_res = TEMP_FAILURE_RETRY(::poll(&m_fds, 1, _timeout));
 		if(poll_res <= 0)
 		{
 			if(poll_res == 0)
@@ -149,9 +149,9 @@ int Socket::send(const void *_data, size_t _size, int _timeout)
 {
 	if(!_data)
 		return -1;
-	if(fcntl(fd(), F_GETFL) & O_ASYNC)
+	if(::fcntl(fd(), F_GETFL) & O_ASYNC)
 		return asyncSend(_data, _size, _timeout);
-	else if(fcntl(fd(), F_GETFL) & O_NONBLOCK)
+	else if(::fcntl(fd(), F_GETFL) & O_NONBLOCK)
 		return syncSend(_data, _size, _timeout);
 	return -1;
 }
@@ -169,7 +169,7 @@ int Socket::syncRecv(void *_data, size_t _size, int _timeout)
 	while(read_bytes < (int)_size)
 	{
 		int bytes_for_read = _size - read_bytes;
-		poll_res = TEMP_FAILURE_RETRY(poll(&m_fds, 1, _timeout));
+		poll_res = TEMP_FAILURE_RETRY(::poll(&m_fds, 1, _timeout));
 		if(poll_res <= 0)
 		{
 			if(poll_res == 0)
@@ -226,7 +226,7 @@ int Socket::asyncRecv(void *_data, size_t _size, int _timeout)
 		}
 		read_bytes += tmp_bytes;
 	}
-	memcpy(_data, char_data, _size);
+	::memcpy(_data, char_data, _size);
 	return tmp_bytes;
 }
 
@@ -236,9 +236,9 @@ int Socket::recv(void *_data, size_t _size, int _timeout)
 {
 	if(!_data)
 		return -1;
-	if(fcntl(fd(), F_GETFL) & O_ASYNC)
+	if(::fcntl(fd(), F_GETFL) & O_ASYNC)
 		return asyncRecv(_data, _size, _timeout);
-	if(fcntl(fd(), F_GETFL) & O_NONBLOCK)
+	if(::fcntl(fd(), F_GETFL) & O_NONBLOCK)
 		return syncRecv(_data, _size, _timeout);
 	return -1;
 }
@@ -249,7 +249,7 @@ void Socket::waitData(int _timeout)
 {
 	m_fds.events = POLLIN;
 	int poll_res;
-	poll_res = TEMP_FAILURE_RETRY(poll(&m_fds, 1, _timeout));
+	poll_res = TEMP_FAILURE_RETRY(::poll(&m_fds, 1, _timeout));
 	if(poll_res <= 0)
 	{
 		if(poll_res == 0)

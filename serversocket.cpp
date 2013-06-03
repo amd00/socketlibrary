@@ -57,26 +57,26 @@ void ServerSocket::start()
 	m_type = Sync;
 // Запуск синхронной обработки событий
 // Инициализация неблокируемого серверного сокета
-	if(fcntl(m_listener, F_SETFL, O_NONBLOCK) == -1)
+	if(::fcntl(m_listener, F_SETFL, O_NONBLOCK) == -1)
 	{
 		perror("ServerSocket::Start fcntl");
 		return;
 	}
 	const int on = 1;
 // Принудительное освобождение порта при запуске
-	if(setsockopt(m_listener, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1)
+	if(::setsockopt(m_listener, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1)
 	{
 		perror("ServerSocket::Start setsockopt");
 		return;
 	}
 // Привязка сокета к порту
-	if(bind(m_listener, &m_addr, sizeof(m_addr)) == -1)
+	if(::bind(m_listener, &m_addr, sizeof(m_addr)) == -1)
 	{
 		perror("ServerSocket::Start bind");
 		return;
 	}
 // Запуск прослушивания
-	if(listen(m_listener, SOMAXCONN) == -1)
+	if(::listen(m_listener, SOMAXCONN) == -1)
 	{
 		perror("ServerSocket::Start listen");
 		return;
@@ -87,7 +87,7 @@ void ServerSocket::start()
 // Основной цикл
 	while(true)
 	{
-		memset(m_fds, 0, sizeof(m_fds));
+		::memset(m_fds, 0, sizeof(m_fds));
 // Инициализация массива структур "pollfd"
 		int i = 0;
  		for(SocketMap::iterator it = m_sockets.begin(); it != m_sockets.end(); it++, i++)
@@ -100,13 +100,13 @@ void ServerSocket::start()
 // Ожидание события на файловом дескрипторе
 
 		int res;
-		res = TEMP_FAILURE_RETRY(poll(m_fds, m_sockets.size(), -1));
+		res = TEMP_FAILURE_RETRY(::poll(m_fds, m_sockets.size(), -1));
 		if(res == -1)
 		{
 			perror("ServerSocket::Start poll");
 			continue;
 		}
-		if( m_fds[0].revents != 0)
+		if(m_fds[0].revents != 0)
 		{
 		// Обработка события на серверном сокете
 			sockaddr a;
@@ -122,7 +122,7 @@ void ServerSocket::start()
 			Socket *s = getNewSocket(sock);
 			if(!s)
 			{
-				close(sock);
+				::close(sock);
 				continue;
 			}
 			m_sockets[s -> fd()] = s;
@@ -150,26 +150,26 @@ void ServerSocket::threadStart()
 	m_type = Thread;
 	// Запуск синхронной обработки событий
 // Инициализация неблокируемого серверного сокета
-	if(fcntl(m_listener, F_SETFL, O_NONBLOCK) == -1)
+	if(::fcntl(m_listener, F_SETFL, O_NONBLOCK) == -1)
 	{
 		perror("ServerSocket::Start fcntl");
 		return;
 	}
 	const int on = 1;
 // Принудительное освобождение порта при запуске
-	if(setsockopt(m_listener, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1)
+	if(::setsockopt(m_listener, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1)
 	{
 		perror("ServerSocket::Start setsockopt");
 		return;
 	}
 // Привязка сокета к порту
-	if(bind(m_listener, &m_addr, sizeof(m_addr)) == -1)
+	if(::bind(m_listener, &m_addr, sizeof(m_addr)) == -1)
 	{
 		perror("ServerSocket::Start bind");
 		return;
 	}
 // Запуск прослушивания
-	if(listen(m_listener, SOMAXCONN) == -1)
+	if(::listen(m_listener, SOMAXCONN) == -1)
 	{
 		perror("ServerSocket::Start listen");
 		return;
@@ -195,29 +195,29 @@ void *ServerSocket::threadAccept(void *_data)
 	listener_polls[0].events = POLLIN;
 	while(true)
 	{
-		int res = TEMP_FAILURE_RETRY(poll(listener_polls, 1, -1));
+		int res = TEMP_FAILURE_RETRY(::poll(listener_polls, 1, -1));
 		if(res == -1)
 		{
-			perror("ServerSocket::ThreadAccept poll");
+			::perror("ServerSocket::ThreadAccept poll");
 			continue;
 		}
 	// Обработка события на серверном сокете
 		sockaddr a;
-		memset(&a, 0, sizeof(a));
+		::memset(&a, 0, sizeof(a));
 		socklen_t la = sizeof(a);
 	// Инициализация подключённого сокета
 		
 		int sock = TEMP_FAILURE_RETRY(::accept(l, &a, &la));
 		if(sock == -1)
 		{
-			perror("ServerSocket::ThreadAccept accept");
+			::perror("ServerSocket::ThreadAccept accept");
 			continue;
 		}
 		pthread_mutex_lock(&m_mutex);
 		Socket *s = self -> getNewSocket(sock);
 		if(!s)
 		{
-			close(sock);
+			::close(sock);
 			pthread_mutex_unlock(&m_mutex);
 			continue;
 		}
@@ -279,11 +279,11 @@ void ServerSocket::asyncStart()
 	m_type = Async;
 // Запуск асинхронной обработки событий
 // Инициализация асинхронного серверного сокета
-	if(fcntl(m_listener, F_SETFL, FASYNC) == -1 || 
-		fcntl(m_listener, F_SETOWN, getpid()) == -1 || 
-		fcntl(m_listener, F_SETSIG, SIGRTMIN + 5) == -1)
+	if(::fcntl(m_listener, F_SETFL, FASYNC) == -1 || 
+		::fcntl(m_listener, F_SETOWN, getpid()) == -1 || 
+		::fcntl(m_listener, F_SETSIG, SIGRTMIN + 5) == -1)
 	{
-		perror("ServerSocket::AsyncStart fcntl");
+		::perror("ServerSocket::AsyncStart fcntl");
 		return;
 	}
 // Определение обработчика сигнала ввода-вывода
@@ -296,35 +296,35 @@ void ServerSocket::asyncStart()
 	sa_recv.sa_sigaction = ServerSocket::asyncReceiver;
 	sa_recv.sa_flags = SA_RESTART | SA_SIGINFO;
 	
-	if(sigaddset(&sa_accept.sa_mask, SIGRTMIN + 5) == -1 || 
-		  sigaddset(&sa_accept.sa_mask, SIGRTMIN + 6) == -1 ||
-		  sigaddset(&sa_recv.sa_mask, SIGRTMIN + 5) == -1 || 
-		  sigaddset(&sa_recv.sa_mask, SIGRTMIN + 6) == -1)
+	if(::sigaddset(&sa_accept.sa_mask, SIGRTMIN + 5) == -1 || 
+		  ::sigaddset(&sa_accept.sa_mask, SIGRTMIN + 6) == -1 ||
+		  ::sigaddset(&sa_recv.sa_mask, SIGRTMIN + 5) == -1 || 
+		  ::sigaddset(&sa_recv.sa_mask, SIGRTMIN + 6) == -1)
 	{
-		perror("ServerSocket::AsyncStart sigaddset");
+		::perror("ServerSocket::AsyncStart sigaddset");
 		return;
 	}
-	if(sigaction(SIGRTMIN + 5, &sa_accept, NULL) == -1 || 
-		  sigaction(SIGRTMIN + 6, &sa_recv, NULL) == -1)
+	if(::sigaction(SIGRTMIN + 5, &sa_accept, NULL) == -1 || 
+		  ::sigaction(SIGRTMIN + 6, &sa_recv, NULL) == -1)
 	{
-		perror("ServerSocket::AsyncStart sigaction");
+		::perror("ServerSocket::AsyncStart sigaction");
 		return;
 	}
 	const int on = 1;
-	if(setsockopt(m_listener, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1)
+	if(::setsockopt(m_listener, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1)
 	{
-		perror("ServerSocket::AsyncStart setsockopt");
+		::perror("ServerSocket::AsyncStart setsockopt");
 		return;
 	}	
-	if(bind(m_listener, &m_addr, sizeof(m_addr)) == -1)
+	if(::bind(m_listener, &m_addr, sizeof(m_addr)) == -1)
 	{
-		perror("ServerSocket::AsyncStart bind");
+		::perror("ServerSocket::AsyncStart bind");
 		return;
 	}
 		
-	if(listen(m_listener, SOMAXCONN) == -1)
+	if(::listen(m_listener, SOMAXCONN) == -1)
 	{
-		perror("ServerSocket::AsyncStart listen");
+		::perror("ServerSocket::AsyncStart listen");
 		return;
 	}
 	m_servers[m_listener] = this;
@@ -345,27 +345,27 @@ void ServerSocket::asyncAccept(int _sig, siginfo_t *_sig_info, void*)
 		return;
 	}
 	sockaddr a;
-	memset(&a, 0, sizeof(a));
+	::memset(&a, 0, sizeof(a));
 	socklen_t la = sizeof(a);
 // Инициализация подключённого асинхронного сокета
 	int sock = TEMP_FAILURE_RETRY(::accept(_sig_info -> si_fd, &a, &la));
 	if(sock == -1)
 	{
-		perror("ServerSocket::AsyncReceiver accept");
+		::perror("ServerSocket::AsyncReceiver accept");
 		return;
 	}
-	if(fcntl(sock, F_SETFL, FASYNC) == -1 ||
-		  fcntl(sock, F_SETOWN, getpid()) == -1 ||
-		  fcntl(sock, F_SETSIG, SIGRTMIN + 6) == -1)
+	if(::fcntl(sock, F_SETFL, FASYNC) == -1 ||
+		  ::fcntl(sock, F_SETOWN, getpid()) == -1 ||
+		  ::fcntl(sock, F_SETSIG, SIGRTMIN + 6) == -1)
 	{
-		perror("ServerSocket::AsyncReceiver fcntl");
-		close(sock);
+		::perror("ServerSocket::AsyncReceiver fcntl");
+		::close(sock);
 		return;
 	}
 	Socket *s = self -> getNewSocket(sock);
 	if(!s)
 	{
-		close(sock);
+		::close(sock);
 		return;
 	}
 	self -> m_sockets[sock] = s;

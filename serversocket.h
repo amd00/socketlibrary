@@ -52,6 +52,8 @@ private:
 	static void *threadAccept(void *_data);
 	static void *threadReceiver(void *_data);
 	static ServerSocket *findServer(int _fd);
+	
+	void startListen();
 };
 
 // Для реализации асинхронного ввода-вывода используются сигналы SIGRTMIN + 5 и SIGRTMIN + 6

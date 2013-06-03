@@ -52,16 +52,8 @@ ServerSocket::~ServerSocket()
 
 ////////////////////////////////////////////////////////////////////////////////////
 
-void ServerSocket::start()
+void ServerSocket::startListen()
 {
-	m_type = Sync;
-// Запуск синхронной обработки событий
-// Инициализация неблокируемого серверного сокета
-	if(::fcntl(m_listener, F_SETFL, O_NONBLOCK) == -1)
-	{
-		perror("ServerSocket::Start fcntl");
-		return;
-	}
 	const int on = 1;
 // Принудительное освобождение порта при запуске
 	if(::setsockopt(m_listener, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1)
@@ -84,6 +76,20 @@ void ServerSocket::start()
 	Socket *new_sock = getNewSocket(m_listener);
 	m_servers[m_listener] = this;
 	m_sockets[new_sock -> fd()] = new_sock;
+}
+
+void ServerSocket::start()
+{
+	m_type = Sync;
+// Запуск синхронной обработки событий
+// Инициализация неблокируемого серверного сокета
+	if(::fcntl(m_listener, F_SETFL, O_NONBLOCK) == -1)
+	{
+		perror("ServerSocket::Start fcntl");
+		return;
+	}
+// Start listen
+	startListen();
 // Основной цикл
 	while(true)
 	{
@@ -155,26 +161,7 @@ void ServerSocket::threadStart()
 		perror("ServerSocket::Start fcntl");
 		return;
 	}
-	const int on = 1;
-// Принудительное освобождение порта при запуске
-	if(::setsockopt(m_listener, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1)
-	{
-		perror("ServerSocket::Start setsockopt");
-		return;
-	}
-// Привязка сокета к порту
-	if(::bind(m_listener, &m_addr, sizeof(m_addr)) == -1)
-	{
-		perror("ServerSocket::Start bind");
-		return;
-	}
-// Запуск прослушивания
-	if(::listen(m_listener, SOMAXCONN) == -1)
-	{
-		perror("ServerSocket::Start listen");
-		return;
-	}
-	m_servers[m_listener] = this;
+	startListen();
 // Создание потока, слушающего порт
 	pthread_t p_th;
 	pthread_attr_t attr;
@@ -310,25 +297,7 @@ void ServerSocket::asyncStart()
 		::perror("ServerSocket::AsyncStart sigaction");
 		return;
 	}
-	const int on = 1;
-	if(::setsockopt(m_listener, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1)
-	{
-		::perror("ServerSocket::AsyncStart setsockopt");
-		return;
-	}	
-	if(::bind(m_listener, &m_addr, sizeof(m_addr)) == -1)
-	{
-		::perror("ServerSocket::AsyncStart bind");
-		return;
-	}
-		
-	if(::listen(m_listener, SOMAXCONN) == -1)
-	{
-		::perror("ServerSocket::AsyncStart listen");
-		return;
-	}
-	m_servers[m_listener] = this;
-	m_sockets[m_listener] = getNewSocket(m_listener);
+	startListen();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////

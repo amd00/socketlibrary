@@ -1,48 +1,10 @@
 
-#include <unistd.h>
-
 #include "unixserversocket.h"
 
-////////////////////////////////////////////////////////////////////////////////////
-
-UnixServerSocket::UnixServerSocket(const char *path) : ServerSocket()
+UnixServerSocket::UnixServerSocket(const char *_path) : ServerSocket()
 {
-// Удаление файла
-	unlink(path);
 // Создание серверного сокета
-	((sockaddr_un*)&addr) -> sun_family = AF_UNIX;
-	strcpy(((sockaddr_un*)&addr) -> sun_path, path ? path : "");
-	listener = socket(PF_UNIX, SOCK_STREAM, 0);
+	((sockaddr_un*)&m_addr) -> sun_family = AF_UNIX;
+	strcpy(((sockaddr_un*)&m_addr) -> sun_path, _path ? _path : "");
+	m_listener = socket(PF_UNIX, SOCK_STREAM, 0);
 }
-
-////////////////////////////////////////////////////////////////////////////////////
-
-UnixServerSocket::~UnixServerSocket()
-{
-}
-
-////////////////////////////////////////////////////////////////////////////////////
-
-UnixSocket *UnixServerSocket::GetNewSocket(int fd)
-{
-	UnixSocket *tmp_socket = new UnixSocket(fd);
-	return tmp_socket;
-}
-
-////////////////////////////////////////////////////////////////////////////////////
-
-void UnixServerSocket::Accept(Socket *sock)
-{
-	Accept((UnixSocket*)sock);
-}
-
-////////////////////////////////////////////////////////////////////////////////////
-
-void UnixServerSocket::Receiver(Socket *sock)
-{
-	Receiver((UnixSocket*)sock);
-}
-
-////////////////////////////////////////////////////////////////////////////////////
-
-

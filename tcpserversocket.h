@@ -5,24 +5,20 @@
 #include "serversocket.h"
 #include "tcpsocket.h"
 
-////////////////////////////////////////////////////////////////////////////////////
-
 class TcpServerSocket : public ServerSocket
 {
+public:
+	TcpServerSocket(int _port);
+	virtual ~TcpServerSocket() {}
+	
 protected:
-	virtual void Accept(TcpSocket *sock) = 0;	// Обработка новых подключений
-	virtual void Receiver(TcpSocket *sock) = 0;	// Обработка входящих данных
+	virtual void accept(TcpSocket *_sock) = 0;
+	virtual void receiver(TcpSocket *_sock) = 0;
 
 private:
-	TcpSocket *GetNewSocket(int fd);			// Создание нового объекта "TcpSocket"
-	void Accept(Socket *sock);					// Вызывает Accept(TcpSocket*)
-	void Receiver(Socket *sock);					// Вызывает Receiver(TcpSocket*)
-
-public:
-	TcpServerSocket(int port);					// Конструктор
-	virtual ~TcpServerSocket();				// Деструктор
+	TcpSocket *getNewSocket(int _fd) const { return new TcpSocket(_fd); }
+	void accept(Socket *_sock) { accept((TcpSocket*)_sock); }
+	void receiver(Socket *_sock) { receiver((TcpSocket*)_sock); }
 };
-
-////////////////////////////////////////////////////////////////////////////////////
 
 #endif

@@ -1,4 +1,25 @@
 
+/*
+ *  Copyright (C) 2013 Andrey Dudakov
+ *
+ *  Authors: Andrey "amd00" Dudakov
+ *
+ *  This file is part of socketlibrary.
+ *
+ *  socketlibrary is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  socketlibrary is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with socketlibrary.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <fcntl.h>
 #include <stdio.h>
 #include <pthread.h>
@@ -19,6 +40,8 @@ public:
 	};
 } sock_eraser;
 
+/************************************************************************/
+
 pthread_mutex_t ServerSocket::m_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
 ServerSocketMap ServerSocket::m_servers;
@@ -35,8 +58,6 @@ ServerSocket *ServerSocket::findServer(int _fd)
 
 ServerSocket::ServerSocket() : m_sockets()
 {
-// Конструктор
-// 	servers.push_back(this);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -73,9 +94,9 @@ void ServerSocket::startListen()
 		perror("ServerSocket::Start listen");
 		return;
 	}
-	Socket *new_sock = getNewSocket(m_listener);
+// 	Socket *new_sock = getNewSocket(m_listener);
 	m_servers[m_listener] = this;
-	m_sockets[new_sock -> fd()] = new_sock;
+// 	m_sockets[new_sock -> fd()] = new_sock;
 }
 
 void ServerSocket::start()
@@ -106,7 +127,7 @@ void ServerSocket::start()
 // Ожидание события на файловом дескрипторе
 
 		int res;
-		res = TEMP_FAILURE_RETRY(::poll(m_fds, m_sockets.size(), -1));
+		res = ::poll(m_fds, m_sockets.size(), -1);
 		if(res == -1)
 		{
 			perror("ServerSocket::Start poll");
@@ -119,7 +140,7 @@ void ServerSocket::start()
 			memset(&a, 0, sizeof(a));
 			socklen_t la = sizeof(a);
 		// Инициализация подключённого неблокируемого сокета
-			int sock = TEMP_FAILURE_RETRY(::accept(m_listener, &a, &la));
+			int sock = ::accept(m_listener, &a, &la);
 			if(sock == -1)
 			{
 				perror("ServerSocket::Start accept");
@@ -182,7 +203,7 @@ void *ServerSocket::threadAccept(void *_data)
 	listener_polls[0].events = POLLIN;
 	while(true)
 	{
-		int res = TEMP_FAILURE_RETRY(::poll(listener_polls, 1, -1));
+		int res = ::poll(listener_polls, 1, -1);
 		if(res == -1)
 		{
 			::perror("ServerSocket::ThreadAccept poll");
@@ -194,7 +215,7 @@ void *ServerSocket::threadAccept(void *_data)
 		socklen_t la = sizeof(a);
 	// Инициализация подключённого сокета
 		
-		int sock = TEMP_FAILURE_RETRY(::accept(l, &a, &la));
+		int sock = ::accept(l, &a, &la);
 		if(sock == -1)
 		{
 			::perror("ServerSocket::ThreadAccept accept");
@@ -244,17 +265,20 @@ void *ServerSocket::threadReceiver(void *_data)
 
 ////////////////////////////////////////////////////////////////////////////////////
 
-void ServerSocket::disconnectClient(Socket *socket)
+void ServerSocket::disconnectClient(Socket *_socket)
 {
 // Отключение клиента
 	pthread_mutex_lock(&m_mutex);
-	if(m_sockets.erase(socket -> fd()))
+	if(m_sockets.erase(_socket -> fd()))
 	{
-		delete socket;
-		socket = NULL;
-		pthread_mutex_unlock(&m_mutex);
+		::close(_socket -> fd());
+		delete _socket;
+		_socket = NULL;
 		if(m_type == Thread)
+		{
+			pthread_mutex_unlock(&m_mutex);
 			pthread_exit(NULL);
+		}
 	}
    	pthread_mutex_unlock(&m_mutex);
 }
@@ -268,7 +292,7 @@ void ServerSocket::asyncStart()
 // Инициализация асинхронного серверного сокета
 	if(::fcntl(m_listener, F_SETFL, FASYNC) == -1 || 
 		::fcntl(m_listener, F_SETOWN, getpid()) == -1 || 
-		::fcntl(m_listener, F_SETSIG, SIGRTMIN + 5) == -1)
+		::fcntl(m_listener, F_SETSIG, ACCEPTSIG) == -1)
 	{
 		::perror("ServerSocket::AsyncStart fcntl");
 		return;
@@ -278,21 +302,21 @@ void ServerSocket::asyncStart()
 	struct sigaction sa_accept, sa_recv;
 	
 	sa_accept.sa_sigaction = ServerSocket::asyncAccept;
-	sa_accept.sa_flags = SA_RESTART | SA_SIGINFO;
+	sa_accept.sa_flags = SA_SIGINFO;
 	
 	sa_recv.sa_sigaction = ServerSocket::asyncReceiver;
-	sa_recv.sa_flags = SA_RESTART | SA_SIGINFO;
+	sa_recv.sa_flags = SA_SIGINFO;
 	
-	if(::sigaddset(&sa_accept.sa_mask, SIGRTMIN + 5) == -1 || 
-		  ::sigaddset(&sa_accept.sa_mask, SIGRTMIN + 6) == -1 ||
-		  ::sigaddset(&sa_recv.sa_mask, SIGRTMIN + 5) == -1 || 
-		  ::sigaddset(&sa_recv.sa_mask, SIGRTMIN + 6) == -1)
+	if(::sigaddset(&sa_accept.sa_mask, ACCEPTSIG) == -1 || 
+		  ::sigaddset(&sa_accept.sa_mask, SIGIO) == -1 ||
+		  ::sigaddset(&sa_recv.sa_mask, ACCEPTSIG) == -1 || 
+		  ::sigaddset(&sa_recv.sa_mask, SIGIO) == -1)
 	{
-		::perror("ServerSocket::AsyncStart sigaddset");
+		::perror("ServerSocket::AsyncStart sigemptyset");
 		return;
 	}
-	if(::sigaction(SIGRTMIN + 5, &sa_accept, NULL) == -1 || 
-		  ::sigaction(SIGRTMIN + 6, &sa_recv, NULL) == -1)
+	if(::sigaction(ACCEPTSIG, &sa_accept, NULL) == -1 || 
+		  ::sigaction(SIGIO, &sa_recv, NULL) == -1)
 	{
 		::perror("ServerSocket::AsyncStart sigaction");
 		return;
@@ -317,7 +341,7 @@ void ServerSocket::asyncAccept(int _sig, siginfo_t *_sig_info, void*)
 	::memset(&a, 0, sizeof(a));
 	socklen_t la = sizeof(a);
 // Инициализация подключённого асинхронного сокета
-	int sock = TEMP_FAILURE_RETRY(::accept(_sig_info -> si_fd, &a, &la));
+	int sock = ::accept(_sig_info -> si_fd, &a, &la);
 	if(sock == -1)
 	{
 		::perror("ServerSocket::AsyncReceiver accept");
@@ -325,7 +349,7 @@ void ServerSocket::asyncAccept(int _sig, siginfo_t *_sig_info, void*)
 	}
 	if(::fcntl(sock, F_SETFL, FASYNC) == -1 ||
 		  ::fcntl(sock, F_SETOWN, getpid()) == -1 ||
-		  ::fcntl(sock, F_SETSIG, SIGRTMIN + 6) == -1)
+		  ::fcntl(sock, F_SETSIG, SIGIO) == -1)
 	{
 		::perror("ServerSocket::AsyncReceiver fcntl");
 		::close(sock);
@@ -358,5 +382,4 @@ void ServerSocket::asyncReceiver(int _sig, siginfo_t *_sig_info, void*)
 	if(!tmp_socket)
 		return;
 	self -> receiver(tmp_socket);
-	return;
 }

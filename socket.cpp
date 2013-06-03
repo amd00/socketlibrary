@@ -1,4 +1,25 @@
 
+/*
+ *  Copyright (C) 2013 Andrey Dudakov
+ *
+ *  Authors: Andrey "amd00" Dudakov
+ *
+ *  This file is part of socketlibrary.
+ *
+ *  socketlibrary is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  socketlibrary is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with socketlibrary.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/poll.h>
@@ -111,10 +132,7 @@ int Socket::syncSend(const void *_data, size_t _size, int _timeout)
 			return -1;
 		}
 		if(m_fds.revents & POLLHUP || m_fds.revents & POLLERR)
-		{
- 			disconnect();
 			return 0;
-		}
 		int tmp_bytes = TEMP_FAILURE_RETRY(::send(fd(), &char_data[sent_bytes], bytes_for_send, MSG_NOSIGNAL));
 		if(tmp_bytes == -1)
 		{
@@ -135,10 +153,7 @@ int Socket::asyncSend(const void *_data, size_t _size, int _timeout)
 	{
 		perror("Socket::AsyncSend send");
 		if(errno == EPIPE)
-		{
-			disconnect();
 			tmp_bytes = 0;
-		}
 	}
 	return tmp_bytes;
 }
@@ -178,10 +193,7 @@ int Socket::syncRecv(void *_data, size_t _size, int _timeout)
 			return -1;
 		}
 		if(m_fds.revents & POLLHUP || m_fds.revents & POLLERR || m_fds.revents & POLLNVAL)
-		{
- 			disconnect();
 			return 0;
-		}
 		int tmp_bytes;
 		tmp_bytes = TEMP_FAILURE_RETRY(::recv(fd(), &char_data[read_bytes], 
 										   bytes_for_read, MSG_NOSIGNAL));
@@ -191,10 +203,7 @@ int Socket::syncRecv(void *_data, size_t _size, int _timeout)
 			return -1;
 		}
 		if(!tmp_bytes)
-		{
- 			disconnect();
 			return 0;
-		}
 		read_bytes += tmp_bytes;
 	}
 	return read_bytes;
@@ -212,18 +221,15 @@ int Socket::asyncRecv(void *_data, size_t _size, int _timeout)
 	while(read_bytes < (int)_size)
 	{
 		int bytes_for_read = _size - read_bytes;
-		tmp_bytes = TEMP_FAILURE_RETRY(::recv(fd(), &char_data[read_bytes], 
-									   bytes_for_read, MSG_NOSIGNAL));
+		tmp_bytes = ::recv(fd(), &char_data[read_bytes], 
+									   bytes_for_read, MSG_NOSIGNAL);
 		if(tmp_bytes == -1)
 		{
 			perror("Socket::AsyncRecv recv");
 			return -1;
 		}
 		if(tmp_bytes == 0)
-		{
-			disconnect();
 			return 0;
-		}
 		read_bytes += tmp_bytes;
 	}
 	::memcpy(_data, char_data, _size);

@@ -3,6 +3,8 @@ CMakeCache.txt
 CMakeFiles
 cmake_install.cmake
 install_manifest.txt
-libsocketlibrary.so*
+libsocketlibrary.so
+libsocketlibrary.so.*
+libsocketlibrary.so.*
 libsocketlibraryS.a
 

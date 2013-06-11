@@ -33,18 +33,18 @@ class TcpSocket : public Socket
 	friend class TcpServerSocket;
 
 private:
-	sockaddr_in m_addr;
+	sockaddr_in *m_addr;
 
 public:
 	TcpSocket(const char *_ip, int _port);
-	~TcpSocket() {}
+	~TcpSocket() { if(m_addr) delete m_addr; }
 
-	bool connect() { return Socket::connect(PF_INET, SOCK_STREAM, (sockaddr*)&m_addr, sizeof(m_addr)); }
-	const char *address() const { return ::inet_ntoa(m_addr.sin_addr); }
-	int port() const { return ::ntohs(m_addr.sin_port); }
+	bool connect() { return Socket::connect(PF_INET, SOCK_STREAM, (sockaddr*)m_addr, sizeof(sockaddr_in)); }
+	const char *address() const { return ::inet_ntoa(m_addr -> sin_addr); }
+	int port() const { return ::ntohs(m_addr -> sin_port); }
 	
 private:
-	TcpSocket(int _fd);
+	TcpSocket(int _fd, sockaddr *_addr);
 };
 
 #endif

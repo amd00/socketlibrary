@@ -37,7 +37,7 @@ protected:
 	virtual void receiver(TcpSocket *_sock) = 0;
 
 private:
-	TcpSocket *getNewSocket(int _fd) const { return new TcpSocket(_fd); }
+	TcpSocket *getNewSocket(int _fd, sockaddr *_addr) const { return new TcpSocket(_fd, _addr); }
 	void accept(Socket *_sock) { accept((TcpSocket*)_sock); }
 	void receiver(Socket *_sock) { receiver((TcpSocket*)_sock); }
 };

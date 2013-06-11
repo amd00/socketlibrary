@@ -43,7 +43,7 @@ private:
 	static ServerSocketMap m_servers;
 	
 	SocketMap m_sockets;
-	pollfd m_fds[SOMAXCONN+1];
+	pollfd m_fds[SOMAXCONN + 1];
 
 protected:
 	enum Type
@@ -67,7 +67,7 @@ public:
 protected:
 	virtual void accept(Socket *_sock) = 0;
 	virtual void receiver(Socket *_sock) = 0;
-	virtual Socket *getNewSocket(int _fd) const = 0;
+	virtual Socket *getNewSocket(int _fd, sockaddr *_addr) const = 0;
 	virtual void disconnectClient(Socket *_sock);
 	
 private:

@@ -10,12 +10,12 @@ project(socketlibrary)			# Название проекта
 set(SOURCE_LIB serversocket.cpp  socket.cpp  tcpserversocket.cpp  tcpsocket.cpp  unixserversocket.cpp  unixsocket.cpp)			# Тоже самое, но для библиотеки
 set(HEADER_LIB serversocket.h  socket.h  tcpserversocket.h  tcpsocket.h  unixserversocket.h  unixsocket.h)			# Тоже самое, но для библиотеки
 
-add_library(socketlibraryS STATIC ${SOURCE_LIB})	# Создание статической библиотеки с именем socketlibraryS
-add_library(socketlibrary SHARED ${SOURCE_LIB})	# Создание динамической библиотеки с именем socketlibrary
+add_library(socketlibraryS STATIC ${SOURCE_LIB})	# Создание статической библиотеки с именем foo
+add_library(socketlibrary SHARED ${SOURCE_LIB})	# Создание динамической библиотеки с именем foo
 
 set_target_properties(socketlibrary  PROPERTIES
-	  VERSION 1.2.2
-	  SOVERSION 1.2
+	  VERSION 1.4.0
+	  SOVERSION 1.4
 	)
 	
 INSTALL(TARGETS socketlibraryS socketlibrary
@@ -23,7 +23,7 @@ INSTALL(TARGETS socketlibraryS socketlibrary
 	ARCHIVE DESTINATION lib
 )
 
-INSTALL(FILES ${HEADER_LIB}
+INSTALL(FILES ${HEADER_LIB} 
 	DESTINATION include)
 
 # add_executable(main ${SOURCE_EXE})	# Создает исполняемый файл с именем main

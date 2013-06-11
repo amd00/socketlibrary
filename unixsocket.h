@@ -32,17 +32,17 @@ class UnixSocket : public Socket
 	friend class UnixServerSocket;
 
 private:
-	sockaddr_un m_addr;
+	sockaddr_un *m_addr;
 
 public:
 	UnixSocket(const char *_path);
-	~UnixSocket() {}
+	~UnixSocket() { if(m_addr) delete m_addr; }
 	
-	bool connect() { return Socket::connect(PF_UNIX, SOCK_STREAM, (sockaddr*)&m_addr, sizeof(m_addr)); }
-	const char *address() const { return m_addr.sun_path; }
+	bool connect() { return Socket::connect(PF_UNIX, SOCK_STREAM, (sockaddr*)m_addr, sizeof(sockaddr_un)); }
+	const char *address() const { return m_addr -> sun_path; }
 	
 private:
-	UnixSocket(int _fd) : Socket(_fd) {}
+	UnixSocket(int _fd, sockaddr *_addr);
 };
 
 #endif

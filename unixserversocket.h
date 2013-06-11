@@ -33,7 +33,7 @@ protected:
 	virtual void receiver(UnixSocket *_sock) = 0;	// Обработка входящих данных
 
 private:
-	UnixSocket *getNewSocket(int _fd) { return new UnixSocket(_fd); }
+	UnixSocket *getNewSocket(int _fd, sockaddr *_addr) { return new UnixSocket(_fd, _addr); }
 	void accept(Socket *_sock) { accept((UnixSocket*)_sock); }
 	void receiver(Socket *_sock) { receiver((UnixSocket*)_sock); }
 

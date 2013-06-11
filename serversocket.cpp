@@ -99,16 +99,17 @@ void ServerSocket::startListen()
 // 	m_sockets[new_sock -> fd()] = new_sock;
 }
 
+////////////////////////////////////////////////////////////////////////////////////
+
 void ServerSocket::start()
 {
 	m_type = Sync;
 // Запуск синхронной обработки событий
 // Инициализация неблокируемого серверного сокета
-	if(::fcntl(m_listener, F_SETFL, O_NONBLOCK) == -1)
-	{
-		perror("ServerSocket::Start fcntl");
-		return;
-	}
+	::fcntl(m_listener, F_SETFL, O_NONBLOCK);
+	
+	Socket *new_sock = getNewSocket(m_listener, NULL);
+	m_sockets[new_sock -> fd()] = new_sock;
 // Start listen
 	startListen();
 // Основной цикл
@@ -120,14 +121,13 @@ void ServerSocket::start()
  		for(SocketMap::iterator it = m_sockets.begin(); it != m_sockets.end(); it++, i++)
 		{
 			pollfd pol;
-			pol.fd = (it -> second) -> fd();
+			pol.fd = it -> first;
 			pol.events = POLLIN;
 			m_fds[i] = pol;
 		}
 // Ожидание события на файловом дескрипторе
 
-		int res;
-		res = ::poll(m_fds, m_sockets.size(), -1);
+		int res = ::poll(m_fds, m_sockets.size(), -1);
 		if(res == -1)
 		{
 			perror("ServerSocket::Start poll");
@@ -136,20 +136,23 @@ void ServerSocket::start()
 		if(m_fds[0].revents != 0)
 		{
 		// Обработка события на серверном сокете
-			sockaddr a;
-			memset(&a, 0, sizeof(a));
-			socklen_t la = sizeof(a);
+			sockaddr *a = new sockaddr;
+			memset(a, 0, sizeof(sockaddr));
+			socklen_t la = sizeof(sockaddr);
 		// Инициализация подключённого неблокируемого сокета
-			int sock = ::accept(m_listener, &a, &la);
+			int sock = ::accept(m_listener, a, &la);
 			if(sock == -1)
 			{
 				perror("ServerSocket::Start accept");
+				delete a;
 				continue;
 			}
-			Socket *s = getNewSocket(sock);
+			::fcntl(sock, F_SETFL, O_NONBLOCK);
+			Socket *s = getNewSocket(sock, a);
 			if(!s)
 			{
 				::close(sock);
+				delete a;
 				continue;
 			}
 			m_sockets[s -> fd()] = s;
@@ -197,7 +200,7 @@ void *ServerSocket::threadAccept(void *_data)
 {
 	int l = *(int*)_data;
 	ServerSocket *self = m_servers[l];
-	self -> m_sockets[l] = self -> getNewSocket(l);
+	self -> m_sockets[l] = self -> getNewSocket(l, NULL);
 	pollfd listener_polls[1];
 	listener_polls[0].fd = l;
 	listener_polls[0].events = POLLIN;
@@ -210,22 +213,24 @@ void *ServerSocket::threadAccept(void *_data)
 			continue;
 		}
 	// Обработка события на серверном сокете
-		sockaddr a;
-		::memset(&a, 0, sizeof(a));
-		socklen_t la = sizeof(a);
+		sockaddr *a = new sockaddr;
+		::memset(a, 0, sizeof(sockaddr));
+		socklen_t la = sizeof(sockaddr);
 	// Инициализация подключённого сокета
 		
-		int sock = ::accept(l, &a, &la);
+		int sock = ::accept(l, a, &la);
 		if(sock == -1)
 		{
 			::perror("ServerSocket::ThreadAccept accept");
+			delete a;
 			continue;
 		}
 		pthread_mutex_lock(&m_mutex);
-		Socket *s = self -> getNewSocket(sock);
+		Socket *s = self -> getNewSocket(sock, a);
 		if(!s)
 		{
 			::close(sock);
+			delete a;
 			pthread_mutex_unlock(&m_mutex);
 			continue;
 		}
@@ -298,7 +303,7 @@ void ServerSocket::asyncStart()
 		return;
 	}
 // Определение обработчика сигнала ввода-вывода
-	
+
 	struct sigaction sa_accept, sa_recv;
 	
 	sa_accept.sa_sigaction = ServerSocket::asyncAccept;
@@ -337,14 +342,15 @@ void ServerSocket::asyncAccept(int _sig, siginfo_t *_sig_info, void*)
 		fprintf(stderr, "%s\n", "SIGPOLL вернул POLL_ERR");
 		return;
 	}
-	sockaddr a;
-	::memset(&a, 0, sizeof(a));
-	socklen_t la = sizeof(a);
+	sockaddr *a = new sockaddr;
+	::memset(a, 0, sizeof(sockaddr));
+	socklen_t la = sizeof(sockaddr);
 // Инициализация подключённого асинхронного сокета
-	int sock = ::accept(_sig_info -> si_fd, &a, &la);
+	int sock = ::accept(_sig_info -> si_fd, a, &la);
 	if(sock == -1)
 	{
 		::perror("ServerSocket::AsyncReceiver accept");
+		delete a;
 		return;
 	}
 	if(::fcntl(sock, F_SETFL, FASYNC) == -1 ||
@@ -353,12 +359,14 @@ void ServerSocket::asyncAccept(int _sig, siginfo_t *_sig_info, void*)
 	{
 		::perror("ServerSocket::AsyncReceiver fcntl");
 		::close(sock);
+		delete a;
 		return;
 	}
-	Socket *s = self -> getNewSocket(sock);
+	Socket *s = self -> getNewSocket(sock, a);
 	if(!s)
 	{
 		::close(sock);
+		delete a;
 		return;
 	}
 	self -> m_sockets[sock] = s;
@@ -370,6 +378,7 @@ void ServerSocket::asyncAccept(int _sig, siginfo_t *_sig_info, void*)
 
 void ServerSocket::asyncReceiver(int _sig, siginfo_t *_sig_info, void*)
 {
+	fprintf(stderr, "111\n");
 	ServerSocket *self = findServer(_sig_info -> si_fd);
 	if(!self)
 		return;

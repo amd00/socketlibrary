@@ -22,9 +22,14 @@
 
 #include "unixsocket.h"
 
-UnixSocket::UnixSocket(const char *_path) : Socket()
+UnixSocket::UnixSocket(int _fd, sockaddr *_addr) : Socket(_fd)
 {
-	::memset(&m_addr, 0, sizeof(m_addr));
-	m_addr.sun_family = AF_UNIX;
-	::strcpy(m_addr.sun_path, _path ? _path : "");
+	m_addr = (sockaddr_un*)_addr;
+}
+
+UnixSocket::UnixSocket(const char *_path) : Socket(), m_addr(new sockaddr_un)
+{
+	::memset(m_addr, 0, sizeof(sockaddr_un));
+	m_addr -> sun_family = AF_UNIX;
+	::strcpy(m_addr -> sun_path, _path ? _path : "");
 }
